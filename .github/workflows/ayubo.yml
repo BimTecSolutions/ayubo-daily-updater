@@ -1,0 +1,49 @@
+# Save as: .github/workflows/ayubo.yml
+# Repo secret needed: FIREBASE_SERVICE_ACCOUNT  (same secret you already use)
+
+name: Ayubo updater
+
+on:
+  schedule:
+    # Every 5 minutes (UTC). To save Actions minutes, restrict to the hours
+    # after the draw, e.g. "*/5 13-17 * * *" (13:00-17:55 UTC = 18:30-23:25 Sri Lanka).
+    - cron: "*/5 * * * *"
+  workflow_dispatch:      # manual "Run workflow" button for testing
+
+# Never let two runs overlap.
+concurrency:
+  group: ayubo
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4 firebase-admin selenium
+
+      # Only needed if the log says "Selenium initialization failed":
+      # - uses: browser-actions/setup-chrome@v1
+      #   with:
+      #     chrome-version: stable
+      #     install-chromedriver: true
+
+      - name: Write Firebase credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+
+      - name: Run updater
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+          MAX_CONSECUTIVE_MISSES: "1"
+          MAX_NEW_DRAWS_PER_RUN: "20"
+          MAX_SELENIUM_FETCHES: "3"
+        run: python ayubo_updater.py
